@@ -1,26 +1,230 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --cream: #fff8f0;
+  --ink: #5b5470;
+  --mint: #bde7d6;
+  --mint-strong: #8fd3b6;
+  --lavender: #d9c8f0;
+  --peach: #fbd9c6;
+  --lemon: #f8eaa8;
+  --lemon-strong: #f2d36b;
+  --coral: #f08a8a;
+  --dirt: #8b6b4a;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-cream: var(--cream);
+  --color-ink: var(--ink);
+  --color-mint: var(--mint);
+  --color-lavender: var(--lavender);
+  --color-peach: var(--peach);
+  --color-lemon: var(--lemon);
+  --color-coral: var(--coral);
+  --color-dirt: var(--dirt);
+  --font-sans: var(--font-nunito), ui-rounded, system-ui, sans-serif;
+  --shadow-soft: 0 10px 30px -12px rgb(91 84 112 / 0.35);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--cream);
+  color: var(--ink);
+  overscroll-behavior: none;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-nunito), ui-rounded, system-ui, sans-serif;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  touch-action: pan-y;
+}
+
+/* ---------- Animaciones ---------- */
+
+.item-in {
+  animation: item-in 160ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+@keyframes item-in {
+  from {
+    transform: scale(0.6) translateY(-20px);
+    opacity: 0;
+  }
+}
+
+.hidden-peek {
+  animation: peek 900ms ease-in-out infinite;
+}
+@keyframes peek {
+  0%,
+  100% {
+    transform: rotate(12deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-4deg) translateY(-6px);
+  }
+}
+
+.ghost-left,
+.ghost-right,
+.ghost-trash,
+.ghost-shake,
+.ghost-extract {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0);
+  animation-fill-mode: forwards;
+}
+.ghost-left {
+  animation-name: to-left;
+}
+.ghost-right {
+  animation-name: to-right;
+}
+@keyframes to-left {
+  to {
+    transform: translate(min(-28vw, -130px), 34dvh) scale(0.2) rotate(-25deg);
+    opacity: 0;
+  }
+}
+@keyframes to-right {
+  to {
+    transform: translate(max(28vw, 130px), 34dvh) scale(0.2) rotate(25deg);
+    opacity: 0;
+  }
+}
+
+.ghost-trash {
+  animation-name: to-trash;
+  animation-duration: 380ms;
+}
+@keyframes to-trash {
+  to {
+    transform: translateY(50dvh) rotate(140deg) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.ghost-shake,
+.ghost-left.ghost-error,
+.ghost-right.ghost-error {
+  animation-name: shake;
+  animation-duration: 420ms;
+  animation-timing-function: ease-out;
+  filter: sepia(0.4) hue-rotate(-30deg) saturate(1.6);
+}
+@keyframes shake {
+  0% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-14px) rotate(-4deg);
+  }
+  40% {
+    transform: translateX(12px) rotate(3deg);
+  }
+  60% {
+    transform: translateX(-8px);
+  }
+  100% {
+    transform: translateX(0) scale(0.85);
+    opacity: 0;
+  }
+}
+
+.ghost-extract {
+  animation-name: extract;
+  animation-duration: 450ms;
+  animation-timing-function: ease-out;
+  top: 18%;
+  right: 18%;
+}
+@keyframes extract {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: translateY(-30px) scale(1.25) rotate(-15deg);
+  }
+  100% {
+    transform: translate(40px, -120px) scale(0.4) rotate(-40deg);
+    opacity: 0;
+  }
+}
+
+.float-up {
+  animation: float-up 650ms ease-out forwards;
+}
+@keyframes float-up {
+  from {
+    transform: translateY(10px) scale(0.8);
+    opacity: 0;
+  }
+  20% {
+    transform: translateY(0) scale(1.1);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-40px);
+    opacity: 0;
+  }
+}
+
+.flash {
+  background: var(--coral);
+  animation: flash 300ms ease-out forwards;
+}
+@keyframes flash {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.closet-bump {
+  animation: bump 220ms ease-out;
+  transform-origin: 50% 100%;
+}
+@keyframes bump {
+  40% {
+    transform: scale(1.08, 0.94);
+  }
+}
+
+.fly {
+  animation: fly 260ms ease-in-out infinite alternate;
+}
+@keyframes fly {
+  to {
+    transform: translate(3px, -3px) rotate(12deg);
+  }
+}
+
+.pulse {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hidden-peek,
+  .fly,
+  .pulse {
+    animation: none;
+  }
 }
