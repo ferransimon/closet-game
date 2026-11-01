@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newGame, POINTS, START_LIVES, step, type Ctx, type GameState } from "@/lib/game/engine";
+import { newGame, POINTS, QUEUE_SIZE, START_LIVES, step, type Ctx, type GameState } from "@/lib/game/engine";
 import { MIN_TIME_MS, timeForItem } from "@/lib/game/difficulty";
 import type { Item } from "@/lib/game/items";
 
@@ -76,6 +76,22 @@ describe("engine", () => {
       s = step({ ...s, current: { ...s.current, kind: "tie", dirty: false, hidden: null } }, { type: "SORT", side: "left" }, ctx());
     }
     expect(s.score).toBe(POINTS.sort * POINTS.streakEvery + POINTS.streakBonus);
+  });
+});
+
+describe("cola", () => {
+  it("avanza la cola al resolver y mantiene su tamaño", () => {
+    const s0 = newGame(ctx());
+    expect(s0.queue).toHaveLength(QUEUE_SIZE);
+    const s1 = step(s0, { type: "TAP_ITEM" }, ctx());
+    expect(s1.current).toBe(s0.queue[0]);
+    expect(s1.queue.slice(0, -1)).toEqual(s0.queue.slice(1));
+    expect(s1.queue).toHaveLength(QUEUE_SIZE);
+  });
+
+  it("extraer no avanza la cola", () => {
+    const s0 = withItem({ hidden: "keys" });
+    expect(step(s0, { type: "EXTRACT" }, ctx()).queue).toBe(s0.queue);
   });
 });
 

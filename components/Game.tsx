@@ -13,6 +13,14 @@ import { ScoreBoard } from "./ScoreBoard";
 type Screen = "menu" | "playing" | "over";
 
 const RESTART_LOCK_MS = 700;
+
+/** Posición de cada hueco de la pila: y en % del tamaño de la prenda, escala y opacidad. */
+const SLOTS = [
+  { y: 0, s: 1, o: 1 },
+  { y: -86, s: 0.55, o: 0.9 },
+  { y: -142, s: 0.42, o: 0.65 },
+  { y: -187, s: 0.32, o: 0.4 },
+];
 const ctx = () => ({ now: performance.now(), rng: Math.random });
 
 function Heart({ full }: { full: boolean }) {
@@ -196,66 +204,90 @@ export default function Game() {
             </div>
           </header>
 
-          {/* Prenda */}
-          <section className="relative z-10 flex flex-1 items-center justify-center">
-            <div key={item.id} className="item-in relative z-10 w-[min(46vw,210px)]">
-              <button
-                type="button"
-                aria-label={item.dirty ? "Prenda sucia: descartar" : CLOTHING[item.kind].label}
-                onPointerDown={onItemPointer}
-                className={`relative block aspect-square w-full rounded-[2rem] bg-white/80 p-4 shadow-soft ${
-                  item.dirty ? "ring-4 ring-dirt/30" : ""
-                }`}
-              >
-                <ClothingSvg kind={item.kind} color={item.color} className="h-full w-full" />
-                {item.dirty && <DirtOverlay className="absolute inset-4" />}
-              </button>
-              {item.hidden && (
-                <button
-                  type="button"
-                  aria-label="Sacar objeto"
-                  onPointerDown={onHiddenPointer}
-                  className="hidden-peek absolute -right-5 -top-6 h-20 w-20 rounded-full bg-lemon/80 p-2 shadow-soft"
+          {/* Prenda actual + cola de próximas */}
+          <section className="stage relative z-10 flex flex-1 items-end justify-center pb-[3dvh]">
+            <div className="relative aspect-square w-[var(--item-size)]">
+              {[item, ...game.queue].map((it, idx) => {
+                const slot = SLOTS[idx];
+                const active = idx === 0;
+                return (
+                  <div
+                    key={it.id}
+                    className="queue-slot absolute inset-0"
+                    style={{
+                      transform: `translateY(${slot.y}%) scale(${slot.s})`,
+                      opacity: slot.o,
+                      zIndex: 10 - idx,
+                      pointerEvents: active ? "auto" : "none",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      tabIndex={active ? 0 : -1}
+                      aria-hidden={!active}
+                      aria-label={it.dirty ? "Prenda sucia: descartar" : CLOTHING[it.kind].label}
+                      onPointerDown={active ? onItemPointer : undefined}
+                      className={`relative block h-full w-full rounded-[2rem] bg-white/80 p-[8%] shadow-soft ${
+                        it.dirty ? "ring-4 ring-dirt/30" : ""
+                      }`}
+                    >
+                      <ClothingSvg kind={it.kind} color={it.color} className="h-full w-full" />
+                      {it.dirty && <DirtOverlay className="absolute inset-[8%]" />}
+                    </button>
+                    {it.hidden &&
+                      (active ? (
+                        <button
+                          type="button"
+                          aria-label="Sacar objeto"
+                          onPointerDown={onHiddenPointer}
+                          className="hidden-peek absolute -right-[10%] -top-[12%] aspect-square w-[40%] rounded-full bg-lemon/80 p-[4%] shadow-soft"
+                        >
+                          <HiddenSvg kind={it.hidden} className="h-full w-full" />
+                        </button>
+                      ) : (
+                        <span className="absolute -right-[10%] -top-[12%] block aspect-square w-[40%] rotate-12 rounded-full bg-lemon/80 p-[4%]">
+                          <HiddenSvg kind={it.hidden} className="h-full w-full" />
+                        </span>
+                      ))}
+                  </div>
+                );
+              })}
+
+              {/* Fantasmas de animación */}
+              {ev && ev.type !== "extracted" && (
+                <div
+                  key={`g${ev.seq}`}
+                  className={`pointer-events-none absolute inset-0 z-0 ${
+                    ev.type === "sorted"
+                      ? `ghost-${ev.side}`
+                      : ev.type === "discarded"
+                        ? "ghost-trash"
+                        : ev.side
+                          ? `ghost-${ev.side} ghost-error`
+                          : "ghost-shake"
+                  }`}
                 >
-                  <HiddenSvg kind={item.hidden} className="h-full w-full" />
-                </button>
+                  <div className="h-full w-full rounded-[2rem] bg-white/80 p-[8%]">
+                    <ClothingSvg kind={ev.item.kind} color={ev.item.color} className="h-full w-full" />
+                  </div>
+                </div>
+              )}
+              {ev && ev.type === "extracted" && ev.item.hidden && (
+                <div key={`x${ev.seq}`} className="ghost-extract pointer-events-none absolute z-20 aspect-square w-[40%]">
+                  <HiddenSvg kind={ev.item.hidden} className="h-full w-full" />
+                </div>
+              )}
+              {ev && (
+                <div
+                  key={`t${ev.seq}`}
+                  className={`float-up pointer-events-none absolute inset-x-[-50%] top-[30%] z-30 text-center text-2xl font-extrabold [text-shadow:0_2px_0_var(--cream)] ${
+                    ev.type === "error" ? "text-coral" : "text-ink"
+                  }`}
+                >
+                  {ev.type === "error" ? ERROR_TEXT[ev.reason] : `+${ev.points}`}
+                </div>
               )}
             </div>
-
-            {/* Fantasmas de animación */}
-            {ev && ev.type !== "extracted" && (
-              <div
-                key={`g${ev.seq}`}
-                className={`pointer-events-none absolute w-[min(46vw,210px)] ${
-                  ev.type === "sorted"
-                    ? `ghost-${ev.side}`
-                    : ev.type === "discarded"
-                      ? "ghost-trash"
-                      : ev.side
-                        ? `ghost-${ev.side} ghost-error`
-                        : "ghost-shake"
-                }`}
-              >
-                <div className="aspect-square w-full rounded-[2rem] bg-white/80 p-4">
-                  <ClothingSvg kind={ev.item.kind} color={ev.item.color} className="h-full w-full" />
-                </div>
-              </div>
-            )}
-            {ev && ev.type === "extracted" && ev.item.hidden && (
-              <div key={`x${ev.seq}`} className="ghost-extract pointer-events-none absolute h-20 w-20">
-                <HiddenSvg kind={ev.item.hidden} className="h-full w-full" />
-              </div>
-            )}
-            {ev && (
-              <div
-                key={`t${ev.seq}`}
-                className={`float-up pointer-events-none absolute top-[12%] text-2xl font-extrabold ${
-                  ev.type === "error" ? "text-coral" : "text-ink"
-                }`}
-              >
-                {ev.type === "error" ? ERROR_TEXT[ev.reason] : `+${ev.points}`}
-              </div>
-            )}
           </section>
 
           {ev?.type === "error" && <div key={`f${ev.seq}`} className="flash pointer-events-none absolute inset-0 z-20" />}

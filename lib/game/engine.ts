@@ -10,6 +10,8 @@ import {
 } from "./items";
 
 export const START_LIVES = 3;
+/** Prendas visibles en cola después de la actual. */
+export const QUEUE_SIZE = 3;
 export const POINTS = { sort: 10, discard: 15, extract: 25, streakBonus: 20, streakEvery: 10 };
 
 export type ErrorReason = "wrong" | "dirty" | "hidden" | "clean" | "timeout";
@@ -36,6 +38,8 @@ export interface GameState {
   resolved: number;
   streak: number;
   current: Item;
+  /** Próximas prendas, en orden de llegada. */
+  queue: Item[];
   /** Duración total asignada a la prenda actual (ms). */
   duration: number;
   /** Timestamp (ms) en que se agota el tiempo. */
@@ -74,9 +78,11 @@ export function makeItem(n: number, rng: () => number, prevKind?: Item["kind"]):
 
 function withNextItem(s: GameState, ctx: Ctx): GameState {
   if (s.lives <= 0) return { ...s, phase: "over" };
-  const current = makeItem(s.resolved, ctx.rng, s.current.kind);
+  const [current, ...rest] = s.queue;
+  // La prenda que entra al final de la cola se genera con la dificultad de su posición.
+  const queue = [...rest, makeItem(s.resolved + QUEUE_SIZE, ctx.rng, rest.at(-1)?.kind ?? current.kind)];
   const duration = timeForItem(s.resolved, current.hidden !== null);
-  return { ...s, current, duration, deadline: ctx.now + duration };
+  return { ...s, current, queue, duration, deadline: ctx.now + duration };
 }
 
 function fail(s: GameState, ctx: Ctx, reason: ErrorReason, side?: Side): GameState {
@@ -105,7 +111,9 @@ function succeed(s: GameState, ctx: Ctx, base: number, ev: "sorted" | "discarded
 }
 
 export function newGame(ctx: Ctx): GameState {
-  const current = makeItem(0, ctx.rng);
+  const items = [makeItem(0, ctx.rng)];
+  for (let i = 1; i <= QUEUE_SIZE; i++) items.push(makeItem(i, ctx.rng, items[i - 1].kind));
+  const [current, ...queue] = items;
   const duration = timeForItem(0, current.hidden !== null);
   return {
     phase: "playing",
@@ -114,6 +122,7 @@ export function newGame(ctx: Ctx): GameState {
     resolved: 0,
     streak: 0,
     current,
+    queue,
     duration,
     deadline: ctx.now + duration,
     event: null,
