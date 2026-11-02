@@ -1,32 +1,32 @@
-import { dirtyChance, hiddenChance, timeForItem } from "./difficulty";
+import { hiddenChance, spoiledChance, timeForItem } from "./difficulty";
 import {
-  CLOTHING,
-  CLOTHING_KINDS,
+  FOOD,
+  FOOD_KINDS,
   HIDDEN_KINDS,
   PASTELS,
-  SIDE_GENDER,
+  SIDE_CATEGORY,
   type Item,
   type Side,
 } from "./items";
 
 export const START_LIVES = 3;
 /** Prendas visibles en cola después de la actual. */
-export const QUEUE_SIZE = 3;
+export const QUEUE_SIZE = 10;
 export const POINTS = { sort: 10, discard: 15, extract: 25, streakBonus: 20, streakEvery: 10 };
 
-export type ErrorReason = "wrong" | "dirty" | "hidden" | "clean" | "timeout";
+export type ErrorReason = "wrong" | "spoiled" | "hidden" | "fresh" | "timeout";
 
 export const ERROR_TEXT: Record<ErrorReason, string> = {
-  wrong: "¡Armario equivocado!",
-  dirty: "¡Estaba sucia!",
-  hidden: "¡Había algo dentro!",
-  clean: "¡Estaba limpia!",
+  wrong: "¡Lado equivocado!",
+  spoiled: "¡Estaba podrida!",
+  hidden: "¡Tenía algo dentro!",
+  fresh: "¡Estaba buena!",
   timeout: "¡Tiempo!",
 };
 
 export type GameEvent =
-  | { seq: number; type: "sorted"; item: Item; side: Side; points: number }
-  | { seq: number; type: "discarded"; item: Item; points: number }
+  | { seq: number; type: "sorted"; item: Item; side: Side; points: number; streak: number | null }
+  | { seq: number; type: "discarded"; item: Item; points: number; streak: number | null }
   | { seq: number; type: "extracted"; item: Item; points: number }
   | { seq: number; type: "error"; item: Item; reason: ErrorReason; side?: Side };
 
@@ -34,13 +34,13 @@ export interface GameState {
   phase: "playing" | "over";
   score: number;
   lives: number;
-  /** Prendas resueltas (acierto o error): marca la dificultad. */
+  /** Alimentos resueltos (acierto o error): marca la dificultad. */
   resolved: number;
   streak: number;
   current: Item;
-  /** Próximas prendas, en orden de llegada. */
+  /** Próximos alimentos, en orden de llegada. */
   queue: Item[];
-  /** Duración total asignada a la prenda actual (ms). */
+  /** Duración total asignada al alimento actual (ms). */
   duration: number;
   /** Timestamp (ms) en que se agota el tiempo. */
   deadline: number;
@@ -62,24 +62,24 @@ export interface Ctx {
 let nextId = 1;
 
 export function makeItem(n: number, rng: () => number, prevKind?: Item["kind"]): Item {
-  let kind = CLOTHING_KINDS[Math.floor(rng() * CLOTHING_KINDS.length)];
+  let kind = FOOD_KINDS[Math.floor(rng() * FOOD_KINDS.length)];
   if (kind === prevKind) {
-    kind = CLOTHING_KINDS[(CLOTHING_KINDS.indexOf(kind) + 1 + Math.floor(rng() * 3)) % CLOTHING_KINDS.length];
+    kind = FOOD_KINDS[(FOOD_KINDS.indexOf(kind) + 1 + Math.floor(rng() * 3)) % FOOD_KINDS.length];
   }
   const color = PASTELS[Math.floor(rng() * PASTELS.length)];
   const roll = rng();
-  const dirty = roll < dirtyChance(n);
+  const spoiled = roll < spoiledChance(n);
   const hidden =
-    !dirty && roll < dirtyChance(n) + hiddenChance(n)
+    !spoiled && roll < spoiledChance(n) + hiddenChance(n)
       ? HIDDEN_KINDS[Math.floor(rng() * HIDDEN_KINDS.length)]
       : null;
-  return { id: nextId++, kind, color, dirty, hidden };
+  return { id: nextId++, kind, color, spoiled, hidden };
 }
 
 function withNextItem(s: GameState, ctx: Ctx): GameState {
   if (s.lives <= 0) return { ...s, phase: "over" };
   const [current, ...rest] = s.queue;
-  // La prenda que entra al final de la cola se genera con la dificultad de su posición.
+  // El alimento que entra al final de la cola se genera con la dificultad de su posición.
   const queue = [...rest, makeItem(s.resolved + QUEUE_SIZE, ctx.rng, rest.at(-1)?.kind ?? current.kind)];
   const duration = timeForItem(s.resolved, current.hidden !== null);
   return { ...s, current, queue, duration, deadline: ctx.now + duration };
@@ -102,11 +102,13 @@ function fail(s: GameState, ctx: Ctx, reason: ErrorReason, side?: Side): GameSta
 function succeed(s: GameState, ctx: Ctx, base: number, ev: "sorted" | "discarded", side?: Side): GameState {
   const seq = (s.event?.seq ?? 0) + 1;
   const streak = s.streak + 1;
-  const points = base + (streak % POINTS.streakEvery === 0 ? POINTS.streakBonus : 0);
+  const bonus = streak % POINTS.streakEvery === 0;
+  const points = base + (bonus ? POINTS.streakBonus : 0);
+  const streakHit = bonus ? streak : null;
   const event: GameEvent =
     ev === "sorted"
-      ? { seq, type: "sorted", item: s.current, side: side!, points }
-      : { seq, type: "discarded", item: s.current, points };
+      ? { seq, type: "sorted", item: s.current, side: side!, points, streak: streakHit }
+      : { seq, type: "discarded", item: s.current, points, streak: streakHit };
   return withNextItem({ ...s, score: s.score + points, resolved: s.resolved + 1, streak, event }, ctx);
 }
 
@@ -135,13 +137,13 @@ export function step(s: GameState, action: Action, ctx: Ctx): GameState {
 
   switch (action.type) {
     case "SORT": {
-      if (item.dirty) return fail(s, ctx, "dirty", action.side);
+      if (item.spoiled) return fail(s, ctx, "spoiled", action.side);
       if (item.hidden) return fail(s, ctx, "hidden", action.side);
-      if (CLOTHING[item.kind].gender !== SIDE_GENDER[action.side]) return fail(s, ctx, "wrong", action.side);
+      if (FOOD[item.kind].category !== SIDE_CATEGORY[action.side]) return fail(s, ctx, "wrong", action.side);
       return succeed(s, ctx, POINTS.sort, "sorted", action.side);
     }
     case "TAP_ITEM": {
-      if (!item.dirty) return fail(s, ctx, "clean");
+      if (!item.spoiled) return fail(s, ctx, "fresh");
       return succeed(s, ctx, POINTS.discard, "discarded");
     }
     case "EXTRACT": {

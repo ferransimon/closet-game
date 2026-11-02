@@ -10,10 +10,10 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "Armario",
-  description: "Ordena la colada: ropa de hombre a la izquierda, de mujer a la derecha. ¡Rápido!",
-  applicationName: "Armario",
-  appleWebApp: { capable: true, title: "Armario", statusBarStyle: "default" },
+  title: "Plato",
+  description: "Separa la comida: saludable a la izquierda, no saludable a la derecha. ¡Rápido!",
+  applicationName: "Plato",
+  appleWebApp: { capable: true, title: "Plato", statusBarStyle: "default" },
   icons: {
     icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
     apple: "/icons/apple-touch-icon.png",

@@ -4,9 +4,9 @@ export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Armario",
-    short_name: "Armario",
-    description: "Ordena la colada lo más rápido que puedas.",
+    name: "Plato",
+    short_name: "Plato",
+    description: "Separa la comida saludable de la que no lo es, lo más rápido que puedas.",
     start_url: "/",
     scope: "/",
     display: "standalone",

@@ -1,26 +1,37 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
-import { ERROR_TEXT, newGame, START_LIVES, step, type Action, type GameState } from "@/lib/game/engine";
-import { levelFor } from "@/lib/game/difficulty";
-import { CLOTHING } from "@/lib/game/items";
+import { ERROR_TEXT, newGame, QUEUE_SIZE, START_LIVES, step, type Action, type GameState } from "@/lib/game/engine";
+import { levelFor, SPOILED_FROM } from "@/lib/game/difficulty";
+import { FOOD } from "@/lib/game/items";
 import { addScore, loadScores, type ScoreEntry } from "@/lib/scores";
-import { ClothingSvg, DirtOverlay } from "./svg/clothes";
+import { FoodSvg, SpoiledOverlay } from "./svg/food";
 import { HiddenSvg } from "./svg/objects";
-import { Closet } from "./Closet";
+import { Basket } from "./Basket";
 import { ScoreBoard } from "./ScoreBoard";
+import { StreakBurst } from "./StreakBurst";
 
 type Screen = "menu" | "playing" | "over";
 
 const RESTART_LOCK_MS = 700;
 
-/** Posición de cada hueco de la pila: y en % del tamaño de la prenda, escala y opacidad. */
-const SLOTS = [
-  { y: 0, s: 1, o: 1 },
-  { y: -86, s: 0.55, o: 0.9 },
-  { y: -142, s: 0.42, o: 0.65 },
-  { y: -187, s: 0.32, o: 0.4 },
-];
+/**
+ * Huecos de la pila: y = centro en % del tamaño del alimento actual, s = escala, o = opacidad.
+ * El 0 es el actual; del 1 al QUEUE_SIZE se encogen y se solapan.
+ */
+const SLOTS = (() => {
+  const slots = [{ y: 0, s: 1, o: 1 }];
+  for (let i = 1; i <= QUEUE_SIZE; i++) {
+    const t = QUEUE_SIZE > 1 ? (i - 1) / (QUEUE_SIZE - 1) : 0;
+    const s = 0.4 - 0.22 * t;
+    const prev = slots[i - 1];
+    // Cada tarjeta asoma un 70 % por encima de la anterior (solape del 30 %).
+    const y = i === 1 ? -(50 + 6 + (s * 100) / 2) : prev.y - ((prev.s + s) / 2) * 70;
+    slots.push({ y, s, o: 0.9 - 0.65 * t });
+  }
+  return slots;
+})();
+
 const ctx = () => ({ now: performance.now(), rng: Math.random });
 
 function Heart({ full }: { full: boolean }) {
@@ -178,10 +189,10 @@ export default function Game() {
       className="relative mx-auto flex h-dvh w-full max-w-[480px] select-none flex-col overflow-hidden"
       onPointerDown={onStagePointer}
     >
-      {/* Zonas izquierda / derecha */}
+      {/* Zonas izquierda (saludable) / derecha (no saludable) */}
       <div className="pointer-events-none absolute inset-0 flex">
         <div className="flex-1 bg-mint/25" />
-        <div className="flex-1 bg-lavender/25" />
+        <div className="flex-1 bg-coral/10" />
       </div>
 
       {screen === "playing" && game && item && (
@@ -204,7 +215,7 @@ export default function Game() {
             </div>
           </header>
 
-          {/* Prenda actual + cola de próximas */}
+          {/* Alimento actual + cola */}
           <section className="stage relative z-10 flex flex-1 items-end justify-center pb-[3dvh]">
             <div className="relative aspect-square w-[var(--item-size)]">
               {[item, ...game.queue].map((it, idx) => {
@@ -216,8 +227,7 @@ export default function Game() {
                     className="queue-slot absolute inset-0"
                     style={{
                       transform: `translateY(${slot.y}%) scale(${slot.s})`,
-                      opacity: slot.o,
-                      zIndex: 10 - idx,
+                      zIndex: 20 - idx,
                       pointerEvents: active ? "auto" : "none",
                     }}
                   >
@@ -225,27 +235,33 @@ export default function Game() {
                       type="button"
                       tabIndex={active ? 0 : -1}
                       aria-hidden={!active}
-                      aria-label={it.dirty ? "Prenda sucia: descartar" : CLOTHING[it.kind].label}
+                      aria-label={it.spoiled ? "Comida podrida: tirar" : FOOD[it.kind].label}
                       onPointerDown={active ? onItemPointer : undefined}
-                      className={`relative block h-full w-full rounded-[2rem] bg-white/80 p-[8%] shadow-soft ${
-                        it.dirty ? "ring-4 ring-dirt/30" : ""
+                      style={{ backgroundColor: it.color }}
+                      className={`relative block h-full w-full rounded-[2rem] p-[10%] shadow-soft ring-white ${
+                        it.spoiled ? "ring-4 ring-mold/40" : active ? "" : "ring-[6px]"
                       }`}
                     >
-                      <ClothingSvg kind={it.kind} color={it.color} className="h-full w-full" />
-                      {it.dirty && <DirtOverlay className="absolute inset-[8%]" />}
+                      <span className="block h-full w-full transition-opacity duration-150" style={{ opacity: slot.o }}>
+                        <FoodSvg kind={it.kind} className={`h-full w-full ${it.spoiled ? "spoiled" : ""}`} />
+                        {it.spoiled && <SpoiledOverlay className="absolute inset-[10%]" />}
+                      </span>
                     </button>
                     {it.hidden &&
                       (active ? (
                         <button
                           type="button"
-                          aria-label="Sacar objeto"
+                          aria-label="Quitar lo que tiene dentro"
                           onPointerDown={onHiddenPointer}
-                          className="hidden-peek absolute -right-[10%] -top-[12%] aspect-square w-[40%] rounded-full bg-lemon/80 p-[4%] shadow-soft"
+                          className="hidden-peek absolute -right-[10%] -top-[12%] aspect-square w-[40%] rounded-full bg-white p-[5%] shadow-soft"
                         >
                           <HiddenSvg kind={it.hidden} className="h-full w-full" />
                         </button>
                       ) : (
-                        <span className="absolute -right-[10%] -top-[12%] block aspect-square w-[40%] rotate-12 rounded-full bg-lemon/80 p-[4%]">
+                        <span
+                          className="absolute -right-[10%] -top-[12%] block aspect-square w-[40%] rotate-12 rounded-full bg-white p-[5%]"
+                          style={{ opacity: slot.o }}
+                        >
                           <HiddenSvg kind={it.hidden} className="h-full w-full" />
                         </span>
                       ))}
@@ -254,33 +270,34 @@ export default function Game() {
               })}
 
               {/* Fantasmas de animación */}
-              {ev && ev.type !== "extracted" && (
+              {ev && ev.type === "sorted" && (
+                <div key={`g${ev.seq}`} className={`pointer-events-none absolute inset-0 z-30 arc-x arc-${ev.side}`}>
+                  <div className="arc-y h-full w-full">
+                    <div className="h-full w-full rounded-[2rem] p-[10%]" style={{ backgroundColor: ev.item.color }}>
+                      <FoodSvg kind={ev.item.kind} className="h-full w-full" />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {ev && (ev.type === "discarded" || ev.type === "error") && (
                 <div
                   key={`g${ev.seq}`}
-                  className={`pointer-events-none absolute inset-0 z-0 ${
-                    ev.type === "sorted"
-                      ? `ghost-${ev.side}`
-                      : ev.type === "discarded"
-                        ? "ghost-trash"
-                        : ev.side
-                          ? `ghost-${ev.side} ghost-error`
-                          : "ghost-shake"
-                  }`}
+                  className={`pointer-events-none absolute inset-0 z-0 ${ev.type === "discarded" ? "ghost-trash" : "ghost-shake"}`}
                 >
-                  <div className="h-full w-full rounded-[2rem] bg-white/80 p-[8%]">
-                    <ClothingSvg kind={ev.item.kind} color={ev.item.color} className="h-full w-full" />
+                  <div className="h-full w-full rounded-[2rem] p-[10%]" style={{ backgroundColor: ev.item.color }}>
+                    <FoodSvg kind={ev.item.kind} className="h-full w-full" />
                   </div>
                 </div>
               )}
               {ev && ev.type === "extracted" && ev.item.hidden && (
-                <div key={`x${ev.seq}`} className="ghost-extract pointer-events-none absolute z-20 aspect-square w-[40%]">
+                <div key={`x${ev.seq}`} className="ghost-extract pointer-events-none absolute z-30 aspect-square w-[40%]">
                   <HiddenSvg kind={ev.item.hidden} className="h-full w-full" />
                 </div>
               )}
               {ev && (
                 <div
                   key={`t${ev.seq}`}
-                  className={`float-up pointer-events-none absolute inset-x-[-50%] top-[30%] z-30 text-center text-2xl font-extrabold [text-shadow:0_2px_0_var(--cream)] ${
+                  className={`float-up pointer-events-none absolute inset-x-[-50%] top-[30%] z-40 text-center text-2xl font-extrabold [text-shadow:0_2px_0_var(--cream)] ${
                     ev.type === "error" ? "text-coral" : "text-ink"
                   }`}
                 >
@@ -290,12 +307,15 @@ export default function Game() {
             </div>
           </section>
 
+          {ev && ev.type !== "error" && ev.type !== "extracted" && ev.streak && (
+            <StreakBurst key={`s${ev.seq}`} streak={ev.streak} />
+          )}
           {ev?.type === "error" && <div key={`f${ev.seq}`} className="flash pointer-events-none absolute inset-0 z-20" />}
 
-          {/* Armarios */}
+          {/* Cestas */}
           <footer className="relative z-10 flex justify-between px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-            <Closet color="var(--mint)" label="Hombre" bump={bumpLeft} />
-            <Closet color="var(--lavender)" label="Mujer" bump={bumpRight} />
+            <Basket color="var(--mint)" label="Saludable" bump={bumpLeft} />
+            <Basket color="var(--coral-soft)" label="No saludable" bump={bumpRight} />
           </footer>
         </>
       )}
@@ -303,30 +323,33 @@ export default function Game() {
       {screen === "menu" && (
         <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center text-ink">
           <div>
-            <h1 className="text-6xl font-extrabold tracking-tight">Armario</h1>
-            <p className="mt-2 text-ink/60">Ordena la colada antes de que se acabe el tiempo</p>
+            <h1 className="text-6xl font-extrabold tracking-tight">Plato</h1>
+            <p className="mt-2 text-ink/60">Separa lo sano de lo que no antes de que se acabe el tiempo</p>
           </div>
           <div className="flex w-full max-w-xs justify-between">
-            <Closet color="var(--mint)" label="← Hombre" bump={0} />
-            <Closet color="var(--lavender)" label="Mujer →" bump={0} />
+            <Basket color="var(--mint)" label="← Saludable" bump={0} />
+            <Basket color="var(--coral-soft)" label="No saludable →" bump={0} />
           </div>
-          <ul className="flex flex-col gap-2 text-sm text-ink/70">
+          <ul className="flex flex-col gap-2 text-left text-sm text-ink/70">
             <li className="flex items-center gap-3">
-              <span className="relative h-9 w-9 shrink-0 rounded-xl bg-white/80 p-1">
-                <ClothingSvg kind="skirt" color="#F9C6B4" className="h-full w-full" />
-                <DirtOverlay className="absolute inset-1" />
+              <span className="h-9 w-9 shrink-0 rounded-full bg-white p-1">
+                <HiddenSvg kind="worm" className="h-full w-full" />
               </span>
-              Toca la ropa sucia para tirarla
+              Quita gusanos, pegatinas… antes de guardar
             </li>
             <li className="flex items-center gap-3">
-              <span className="h-9 w-9 shrink-0 rounded-full bg-lemon/80 p-1">
-                <HiddenSvg kind="phone" className="h-full w-full" />
+              <span className="relative h-9 w-9 shrink-0 rounded-xl bg-white/80 p-1">
+                <FoodSvg kind="apple" className="spoiled h-full w-full" />
+                <SpoiledOverlay className="absolute inset-1" />
               </span>
-              Saca los objetos antes de guardar
+              <span>
+                Toca la comida podrida para tirarla
+                <span className="block text-xs text-ink/45">aparece a partir del alimento {SPOILED_FROM}</span>
+              </span>
             </li>
           </ul>
           <div className="flex flex-col items-center gap-2">
-            <span className="pulse rounded-full bg-ink px-8 py-4 text-lg font-extrabold text-cream shadow-soft">
+            <span className="cta-pulse rounded-full bg-ink px-8 py-4 text-lg font-extrabold text-cream shadow-soft">
               Toca para jugar
             </span>
             {best > 0 && <span className="text-sm font-bold text-ink/50">Récord: {best}</span>}
@@ -344,7 +367,7 @@ export default function Game() {
           <div className="w-full" onPointerDown={(e) => e.stopPropagation()}>
             <ScoreBoard scores={scores} highlight={rank} />
           </div>
-          <span className="pulse rounded-full bg-ink px-8 py-4 text-lg font-extrabold text-cream shadow-soft">
+          <span className="cta-pulse rounded-full bg-ink px-8 py-4 text-lg font-extrabold text-cream shadow-soft">
             Toca para reintentar
           </span>
         </div>

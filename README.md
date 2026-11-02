@@ -1,12 +1,14 @@
-# Armario
+# Plato
 
-Juego PWA (Next.js, export estático): ordena la ropa en el armario de hombre (izquierda) o de mujer (derecha) antes de que se acabe el tiempo.
+Juego PWA (Next.js, export estático): separa la comida saludable (izquierda) de la no saludable (derecha) antes de que se acabe el tiempo.
 
-- **Toque/clic** en la mitad izquierda o derecha → armario.
-- **Toca la prenda** si está sucia para tirarla (+15). Si estaba limpia, pierdes una vida.
-- **Toca el objeto escondido** (móvil, cartera…) antes de guardar (+25).
-- Teclado: ← / → (o A / D), Espacio = tirar, ↑ / E = sacar objeto, Enter = jugar.
-- 3 vidas; el tiempo por prenda baja de 3 s a 0,65 s. Top 20 guardado en `localStorage`.
+- **Toque/clic** en la mitad izquierda o derecha → el alimento vuela en parábola a su cesta.
+- Se ven los **10 próximos alimentos** en cola, para poder ir más rápido.
+- **Toca lo que lleva dentro** (gusano, pegatina, espina, hueso, tapón) antes de guardar (+25).
+- **Toca la comida podrida** para tirarla (+15). Aparece a partir del alimento 15. Si estaba buena, pierdes una vida.
+- Cada **10 aciertos seguidos**: confeti y +20.
+- Teclado: ← / → (o A / D), Espacio = tirar, ↑ / E = quitar objeto, Enter = jugar.
+- 3 vidas; el tiempo por alimento baja de 3 s a 0,65 s. Top 20 guardado en `localStorage`.
 
 ```bash
 npm run dev     # desarrollo

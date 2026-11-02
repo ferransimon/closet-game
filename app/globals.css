@@ -10,7 +10,8 @@
   --lemon: #f8eaa8;
   --lemon-strong: #f2d36b;
   --coral: #f08a8a;
-  --dirt: #8b6b4a;
+  --coral-soft: #f7c1c1;
+  --mold: #7e9a6a;
 }
 
 @theme inline {
@@ -21,7 +22,7 @@
   --color-peach: var(--peach);
   --color-lemon: var(--lemon);
   --color-coral: var(--coral);
-  --color-dirt: var(--dirt);
+  --color-mold: var(--mold);
   --font-sans: var(--font-nunito), ui-rounded, system-ui, sans-serif;
   --shadow-soft: 0 10px 30px -12px rgb(91 84 112 / 0.35);
 }
@@ -54,10 +55,13 @@ button {
 /* ---------- Animaciones ---------- */
 
 .stage {
-  --item-size: min(46vw, 210px, 22dvh);
+  --item-size: min(42vw, 190px, 18.5dvh);
+  /* Distancia del centro del alimento al centro de cada cesta (ver footer en Game.tsx). */
+  --basket-dx: calc(min(50vw, 240px) - 20px - min(17vw, 75px));
+  --basket-dy: calc(var(--item-size) * 0.5 + 3dvh + 48px + min(10vw, 44px));
 }
 
-/* Las prendas bajan por la cola con transición; las nuevas aparecen al fondo. */
+/* Los alimentos bajan por la cola con transición; las nuevas aparecen al fondo. */
 .queue-slot {
   transform-origin: 50% 50%;
   transition:
@@ -94,8 +98,6 @@ button {
   }
 }
 
-.ghost-left,
-.ghost-right,
 .ghost-trash,
 .ghost-shake,
 .ghost-extract {
@@ -103,22 +105,44 @@ button {
   animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0);
   animation-fill-mode: forwards;
 }
-.ghost-left {
-  animation-name: to-left;
+
+/* Parábola: X lineal en la capa exterior, Y sube (ease-out) y cae (ease-in) en la interior. */
+.arc-x {
+  animation: 420ms linear forwards;
 }
-.ghost-right {
-  animation-name: to-right;
+.arc-left {
+  --spin: -1;
+  animation-name: arc-x-left;
 }
-@keyframes to-left {
+.arc-right {
+  --spin: 1;
+  animation-name: arc-x-right;
+}
+@keyframes arc-x-left {
   to {
-    transform: translate(min(-28vw, -130px), 34dvh) scale(0.2) rotate(-25deg);
-    opacity: 0;
+    transform: translateX(calc(var(--basket-dx) * -1));
   }
 }
-@keyframes to-right {
+@keyframes arc-x-right {
   to {
-    transform: translate(max(28vw, 130px), 34dvh) scale(0.2) rotate(25deg);
-    opacity: 0;
+    transform: translateX(var(--basket-dx));
+  }
+}
+.arc-y {
+  animation: arc-y 420ms forwards;
+}
+@keyframes arc-y {
+  0% {
+    transform: translateY(0) scale(1) rotate(0);
+    animation-timing-function: cubic-bezier(0.25, 0.6, 0.45, 1);
+  }
+  38% {
+    transform: translateY(-12dvh) scale(0.7) rotate(calc(var(--spin) * 120deg));
+    animation-timing-function: cubic-bezier(0.55, 0, 0.75, 0.4);
+  }
+  100% {
+    transform: translateY(var(--basket-dy)) scale(0.28) rotate(calc(var(--spin) * 300deg));
+    opacity: 0.6;
   }
 }
 
@@ -133,9 +157,7 @@ button {
   }
 }
 
-.ghost-shake,
-.ghost-left.ghost-error,
-.ghost-right.ghost-error {
+.ghost-shake {
   animation-name: shake;
   animation-duration: 420ms;
   animation-timing-function: ease-out;
@@ -211,8 +233,9 @@ button {
   }
 }
 
+/* La cesta rebota cuando le llega el alimento (al final de la parábola). */
 .closet-bump {
-  animation: bump 220ms ease-out;
+  animation: bump 220ms ease-out 360ms;
   transform-origin: 50% 100%;
 }
 @keyframes bump {
@@ -230,10 +253,56 @@ button {
   }
 }
 
-.pulse {
-  animation: pulse 1.4s ease-in-out infinite;
+.spoiled {
+  filter: saturate(0.35) sepia(0.35) hue-rotate(40deg) brightness(0.92);
 }
-@keyframes pulse {
+
+.confetti {
+  animation: confetti 950ms cubic-bezier(0.15, 0.7, 0.4, 1) both;
+}
+@keyframes confetti {
+  from {
+    transform: translate(0, 0) rotate(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--dx), calc(var(--dy) + 80px)) rotate(var(--rot));
+    opacity: 0;
+  }
+}
+
+.streak-text {
+  animation: streak-text 1100ms cubic-bezier(0.2, 0.9, 0.3, 1.4) forwards;
+}
+@keyframes streak-text {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  18% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1);
+  }
+  75% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-30px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.cta-pulse {
+  animation: cta-pulse 1.4s ease-in-out infinite;
+}
+@keyframes cta-pulse {
   50% {
     transform: scale(1.05);
   }
@@ -242,7 +311,53 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .hidden-peek,
   .fly,
-  .pulse {
+  .spoiled {
+  filter: saturate(0.35) sepia(0.35) hue-rotate(40deg) brightness(0.92);
+}
+
+.confetti {
+  animation: confetti 950ms cubic-bezier(0.15, 0.7, 0.4, 1) both;
+}
+@keyframes confetti {
+  from {
+    transform: translate(0, 0) rotate(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--dx), calc(var(--dy) + 80px)) rotate(var(--rot));
+    opacity: 0;
+  }
+}
+
+.streak-text {
+  animation: streak-text 1100ms cubic-bezier(0.2, 0.9, 0.3, 1.4) forwards;
+}
+@keyframes streak-text {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  18% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1);
+  }
+  75% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-30px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.cta-pulse {
     animation: none;
   }
 }

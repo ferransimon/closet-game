@@ -1,50 +1,51 @@
 import { describe, expect, it } from "vitest";
 import { newGame, POINTS, QUEUE_SIZE, START_LIVES, step, type Ctx, type GameState } from "@/lib/game/engine";
-import { MIN_TIME_MS, timeForItem } from "@/lib/game/difficulty";
+import { MIN_TIME_MS, SPOILED_FROM, spoiledChance, timeForItem } from "@/lib/game/difficulty";
+import { makeItem } from "@/lib/game/engine";
 import type { Item } from "@/lib/game/items";
 
 const ctx = (now = 1000): Ctx => ({ now, rng: () => 0.99 });
 
 function withItem(partial: Partial<Item>): GameState {
   const s = newGame(ctx());
-  return { ...s, current: { id: 1, kind: "tie", color: "#fff", dirty: false, hidden: null, ...partial } };
+  return { ...s, current: { id: 1, kind: "apple", color: "#fff", spoiled: false, hidden: null, ...partial } };
 }
 
 describe("engine", () => {
   it("suma puntos al clasificar bien", () => {
-    const s = step(withItem({ kind: "tie" }), { type: "SORT", side: "left" }, ctx());
+    const s = step(withItem({ kind: "apple" }), { type: "SORT", side: "left" }, ctx());
     expect(s.score).toBe(POINTS.sort);
     expect(s.lives).toBe(START_LIVES);
     expect(s.resolved).toBe(1);
-    const s2 = step(withItem({ kind: "dress" }), { type: "SORT", side: "right" }, ctx());
+    const s2 = step(withItem({ kind: "donut" }), { type: "SORT", side: "right" }, ctx());
     expect(s2.score).toBe(POINTS.sort);
   });
 
-  it("quita vida con armario equivocado", () => {
-    const s = step(withItem({ kind: "dress" }), { type: "SORT", side: "left" }, ctx());
+  it("quita vida con lado equivocado", () => {
+    const s = step(withItem({ kind: "donut" }), { type: "SORT", side: "left" }, ctx());
     expect(s.lives).toBe(START_LIVES - 1);
     expect(s.event).toMatchObject({ type: "error", reason: "wrong" });
   });
 
-  it("quita vida al guardar ropa sucia", () => {
-    const s = step(withItem({ dirty: true }), { type: "SORT", side: "left" }, ctx());
-    expect(s.event).toMatchObject({ type: "error", reason: "dirty" });
+  it("quita vida al guardar comida podrida", () => {
+    const s = step(withItem({ spoiled: true }), { type: "SORT", side: "left" }, ctx());
+    expect(s.event).toMatchObject({ type: "error", reason: "spoiled" });
     expect(s.lives).toBe(START_LIVES - 1);
   });
 
-  it("descartar sucia da puntos, descartar limpia quita vida", () => {
-    expect(step(withItem({ dirty: true }), { type: "TAP_ITEM" }, ctx()).score).toBe(POINTS.discard);
+  it("descartar podrida da puntos, descartar buena quita vida", () => {
+    expect(step(withItem({ spoiled: true }), { type: "TAP_ITEM" }, ctx()).score).toBe(POINTS.discard);
     const s = step(withItem({}), { type: "TAP_ITEM" }, ctx());
-    expect(s.event).toMatchObject({ type: "error", reason: "clean" });
+    expect(s.event).toMatchObject({ type: "error", reason: "fresh" });
   });
 
   it("guardar con objeto escondido quita vida", () => {
-    const s = step(withItem({ hidden: "phone" }), { type: "SORT", side: "left" }, ctx());
+    const s = step(withItem({ hidden: "worm" }), { type: "SORT", side: "left" }, ctx());
     expect(s.event).toMatchObject({ type: "error", reason: "hidden" });
   });
 
   it("extraer y luego guardar suma ambos", () => {
-    let s = withItem({ hidden: "wallet" });
+    let s = withItem({ hidden: "sticker" });
     const id = s.current.id;
     s = step(s, { type: "EXTRACT" }, ctx());
     expect(s.current.id).toBe(id);
@@ -62,9 +63,9 @@ describe("engine", () => {
   });
 
   it("termina al quedarse sin vidas", () => {
-    let s = withItem({ kind: "dress" });
+    let s = withItem({ kind: "donut" });
     for (let i = 0; i < START_LIVES; i++) {
-      s = step({ ...s, current: { ...s.current, kind: "dress", dirty: false, hidden: null } }, { type: "SORT", side: "left" }, ctx());
+      s = step({ ...s, current: { ...s.current, kind: "donut", spoiled: false, hidden: null } }, { type: "SORT", side: "left" }, ctx());
     }
     expect(s.phase).toBe("over");
     expect(step(s, { type: "SORT", side: "right" }, ctx())).toBe(s);
@@ -73,9 +74,15 @@ describe("engine", () => {
   it("bonus de racha", () => {
     let s = withItem({});
     for (let i = 0; i < POINTS.streakEvery; i++) {
-      s = step({ ...s, current: { ...s.current, kind: "tie", dirty: false, hidden: null } }, { type: "SORT", side: "left" }, ctx());
+      s = step({ ...s, current: { ...s.current, kind: "apple", spoiled: false, hidden: null } }, { type: "SORT", side: "left" }, ctx());
     }
     expect(s.score).toBe(POINTS.sort * POINTS.streakEvery + POINTS.streakBonus);
+    expect(s.event).toMatchObject({ type: "sorted", streak: POINTS.streakEvery });
+  });
+
+  it("sin racha el evento no la marca", () => {
+    const s = step(withItem({}), { type: "SORT", side: "left" }, ctx());
+    expect(s.event).toMatchObject({ streak: null });
   });
 });
 
@@ -90,12 +97,20 @@ describe("cola", () => {
   });
 
   it("extraer no avanza la cola", () => {
-    const s0 = withItem({ hidden: "keys" });
+    const s0 = withItem({ hidden: "bone" });
     expect(step(s0, { type: "EXTRACT" }, ctx()).queue).toBe(s0.queue);
   });
 });
 
 describe("difficulty", () => {
+  it("no hay comida podrida al principio", () => {
+    expect(spoiledChance(0)).toBe(0);
+    expect(spoiledChance(SPOILED_FROM - 1)).toBe(0);
+    expect(spoiledChance(SPOILED_FROM)).toBeGreaterThan(0);
+    for (let n = 0; n < SPOILED_FROM; n++) expect(makeItem(n, () => 0).spoiled).toBe(false);
+    expect(makeItem(SPOILED_FROM, () => 0).spoiled).toBe(true);
+  });
+
   it("el tiempo baja hasta un mínimo", () => {
     expect(timeForItem(0)).toBe(3000);
     expect(timeForItem(10)).toBeLessThan(timeForItem(5));

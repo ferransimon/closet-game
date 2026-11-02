@@ -1,4 +1,4 @@
-const KEY = "armario.scores";
+const KEY = "plato.scores";
 export const MAX_SCORES = 20;
 
 export interface ScoreEntry {
